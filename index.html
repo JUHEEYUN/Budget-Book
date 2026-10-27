@@ -752,7 +752,8 @@ function demoSeed(){
           savEmg:'400000', savDep:'600000', savInv:'1000000',
           tgt_hyundai:'300000', tgt_lotteA:'300000',
           salA:'36000000', salB:'48000000',
-          own_hyundai:'A', own_lotteA:'A', own_lotteB:'B', own_hana:'B', own_kakao:'A', own_busan:'B' },
+          own_hyundai:'A', own_lotteA:'A', own_lotteB:'B', own_hana:'B', own_kakao:'A', own_busan:'B',
+          dedHead:'A', rentSub:'74000' },
     tx:[
       {id:'d1', date:day(0), kind:'지출', amount:5400,   title:'스타벅스 역삼점', cat:'생활비', pay:'hyundai', who:'A', memo:'', ex:false},
       {id:'d2', date:day(0), kind:'지출', amount:38200,  title:'이마트 성수점',   cat:'생활비', pay:'lotteA',  who:'B', memo:'', ex:false},
@@ -790,7 +791,9 @@ function demo(fn, a){
                        hana:   {gen:2600000, transit:0,      culture:0,      excl:350000},
                        kakao:  {gen:900000,  transit:420000, culture:0,      excl:2400000},
                        busan:  {gen:1300000, transit:610000, culture:90000,  excl:0},
-                       cash:   {gen:800000,  transit:0,      culture:0,      excl:9000000} },
+                       cash:   {gen:800000,  transit:0,      culture:0,      excl:9000000},
+                       _etc:   { ins:{A:1450000, B:0}, don:{A:360000, B:0}, med:{A:300000, B:0}, medBack:{A:100000, B:0},
+                                 rent:1248000, rentMonths:12 } },
              trend:[ {m:'2026-01', card:0, spend:0},
                      {m:'2026-02', card:0, spend:0},
                      {m:'2026-03', card:0, spend:0},
@@ -964,8 +967,10 @@ function dedHouse(){
 
   /* 다음 결제 10만원을 어느 카드로 쓰면 돌려받는 돈이 가장 많이 늘까 */
   var STEP = 100000, pick = null;
+  /* 한 사람에게 몰아 쓰는 게 낫다고 나왔으면, 추천도 그 사람 카드 안에서만 (말이 엇갈리지 않게) */
+  var only = bestX >= 0.96 ? 'A' : (bestX >= 0 && bestX <= 0.04) ? 'B' : '';
   ['A','B'].forEach(function(w){
-    if(!sal[w]) return;
+    if(!sal[w] || (only && w !== only)) return;
     ['check','credit'].forEach(function(tp){
       var cards = PAYS.filter(function(p){ return p.type===tp && ownerOf(p.id)===w; });
       if(!cards.length) return;
@@ -982,6 +987,58 @@ function dedHouse(){
   else if(sal.B) lead = 'B';
 
   return { R:R, sal:sal, cur:cur, now:now, best:best, bestX:bestX, pick:pick, lead:lead };
+}
+
+/* ---------- 카드 말고 다른 혜택 (세액공제 — 낸 돈의 몇 %를 세금에서 바로 빼줍니다) ----------
+   공제율은 지방세(10%)까지 더한 값입니다. 규칙이 바뀌면 여기만 고치세요. */
+var DED_ETC = {
+  ins:  { rate:.132, cap:1000000 },                          // 보장성 보험료 12% (+지방세) · 1인 연 100만원까지
+  don:  { rate:.165 },                                       // 기부금 15% (+지방세)
+  rent: { rateLo:.187, rateHi:.165, salCut:55000000, salMax:80000000, cap:10000000 },  // 월세 17%/15% (+지방세) · 총급여 8천만원 이하 무주택 세대주
+  med:  { rate:.165, pct:.03 }                               // 의료비 — 총급여 3% 넘게 쓴 금액의 15% (+지방세)
+};
+
+/** 보험·기부·월세·의료비 — 줄마다 { 이름, 누구, 돌려받을 돈, 설명 } */
+function dedEtc(sal){
+  var e = (S.yearDed && S.yearDed._etc) || null;
+  var out = { lines:[], total:0 };
+  if(!e) return out;
+  function add(label, w, ref, note){
+    ref = Math.round(Math.max(0, ref));
+    out.lines.push({ label:label, w:w, ref:ref, note:note });
+    out.total += ref;
+  }
+  ['A','B'].forEach(function(w){
+    if(!sal[w]) return;
+    var ins = (e.ins && e.ins[w]) || 0;
+    if(ins > 0) add('보험료', w, Math.min(ins, DED_ETC.ins.cap) * DED_ETC.ins.rate,
+                   '올해 '+man(ins)+' 냄'+(ins > DED_ETC.ins.cap ? ' · '+man(DED_ETC.ins.cap)+'까지만 인정' : ''));
+    var don = (e.don && e.don[w]) || 0;
+    if(don > 0) add('기부금', w, don * DED_ETC.don.rate, '올해 '+man(don)+' 기부');
+  });
+  /* 월세 — 세대주 한 사람이 받고, 시·구 지원금은 빼고 실제 낸 돈만 */
+  if(e.rent > 0){
+    var hw = (S.cfg.dedHead==='A' || S.cfg.dedHead==='B') ? S.cfg.dedHead : '';
+    var sub = +(S.cfg.rentSub || 0) * (e.rentMonths || 0);
+    var paid = Math.max(0, e.rent - sub);
+    if(!hw){
+      out.lines.push({ label:'월세', w:'', ref:0, note:'설정에서 세대주를 고르면 계산돼요' });
+    } else if(sal[hw] && sal[hw] <= DED_ETC.rent.salMax){
+      var r = sal[hw] <= DED_ETC.rent.salCut ? DED_ETC.rent.rateLo : DED_ETC.rent.rateHi;
+      add('월세', hw, Math.min(paid, DED_ETC.rent.cap) * r,
+          '실제 낸 월세 '+man(paid)+(sub ? ' (지원금 '+man(sub)+' 뺌)' : ''));
+    }
+  }
+  /* 의료비 — 실비 받은 건 빼고, 연봉 3%에 가까워질 때만 보여줍니다 */
+  ['A','B'].forEach(function(w){
+    if(!sal[w]) return;
+    var net = Math.max(0, ((e.med && e.med[w]) || 0) - ((e.medBack && e.medBack[w]) || 0));
+    var th = sal[w] * DED_ETC.med.pct;
+    if(net < th * 0.7) return;
+    add('의료비', w, (net - th) * DED_ETC.med.rate,
+        net >= th ? '실비 빼고 '+man(net)+' · '+man(th)+' 넘은 만큼' : man(th)+'까지 '+man(th - net)+' 남음 — 넘으면 혜택 시작');
+  });
+  return out;
 }
 
 /** 정산 탭 — 연말정산 카드 혜택 (우리 집 합계, 쉬운 말로) */
@@ -1001,10 +1058,12 @@ function vDed(){
   }
 
   var d = dedHouse();
+  var ex = dedEtc(d.sal);
 
-  /* ① 돌려받을 돈 */
-  h += '<div class="sub" style="margin-top:14px">카드 덕분에 내년 초에 돌려받을 돈 (두 분 합계)</div>'
-     + '<div class="big num" style="font-size:32px;margin:6px 0 2px">'+approx(d.now)+'</div>';
+  /* ① 돌려받을 돈 — 카드 + 보험·기부·월세 */
+  h += '<div class="sub" style="margin-top:14px">내년 초에 돌려받을 돈 (두 분 합계)</div>'
+     + '<div class="big num" style="font-size:32px;margin:6px 0 2px">'+approx(d.now + ex.total)+'</div>'
+     + (ex.lines.length ? '<div class="sub num">카드 '+approx(d.now)+' · 보험·기부·월세 등 '+approx(ex.total)+'</div>' : '');
 
   /* ② 핵심 한 줄 — 더 받을 수 있는지 */
   var more = d.best - d.now;
@@ -1054,7 +1113,20 @@ function vDed(){
     h += '<div class="banner" style="margin:12px 0 0">명의를 정하지 않은 카드에서 쓴 '+man(unowned)+'은 빠져 있어요. 설정에서 카드 명의를 골라 주세요.</div>';
   }
 
-  /* ⑤ 어떻게 계산돼요? (접어둠) */
+  /* ⑤ 카드 말고 다른 혜택 */
+  if(ex.lines.length){
+    h += '<div class="sub" style="margin:22px 0 2px;font-weight:600">카드 말고 다른 혜택</div><div class="nb">';
+    ex.lines.forEach(function(l){
+      h += '<div class="item" style="padding:12px 0">'
+         +   '<div class="g"><div class="n" style="font-size:14px">'+l.label+(l.w ? ' <span style="font-weight:500;color:var(--muted)">· '+esc(nameOf(l.w))+'</span>' : '')+'</div>'
+         +     '<div class="d num">'+l.note+'</div></div>'
+         +   '<div class="v num" style="font-size:14.5px">'+(l.w ? approx(l.ref) : '—')+'</div>'
+         + '</div>';
+    });
+    h += '</div>';
+  }
+
+  /* ⑥ 어떻게 계산돼요? (접어둠) */
   h += '<button class="fhead" id="dedHelp" aria-expanded="'+(S.dedHelp?'true':'false')+'" style="margin-top:10px;padding:12px 0">'
      +   '<b style="font-size:13px;color:var(--sub)">이게 어떻게 계산돼요?</b>'
      +   '<svg class="i chev" viewBox="0 0 24 24"><path d="m6 9 6 6 6-6"/></svg></button>';
@@ -1074,7 +1146,10 @@ function vDed(){
        +   '<li>그만큼 세금이 줄어서, 넘긴 돈의 대략 <b>2~5%</b>를 내년 초에 돌려받아요.</li>'
        +   maxLines
        +   '<li>나눠 쓰면 두 사람 다 "혜택 없는 25%"를 채워야 해서 그만큼 손해예요. 그래서 <b>한 사람 카드로 몰아 쓰는 게</b> 보통 유리해요.</li>'
-       +   '<li>공과금·통신·보험·대출·월세, 해외 결제, 현금·계좌이체는 계산에서 빠져요.</li>'
+       +   '<li>카드 계산에서는 공과금·통신·보험·대출·월세, 해외 결제, 현금·계좌이체가 빠져요.</li>'
+       +   '<li><b>보험·기부·월세</b>는 카드와 달리 낸 돈에서 바로 몇 %를 돌려줘요 — 보험료 약 13%(1인 100만원까지), 기부금 약 16%, 월세 약 17%(세대주, 지원금 뺀 실제 낸 돈). '
+       +     '보험·기부는 기록의 담당자 이름으로 계산해요.</li>'
+       +   '<li><b>의료비</b>는 실비로 돌려받은 돈을 빼고, 연봉의 3%를 넘게 쓴 만큼만 혜택이 있어요. 그 근처까지 쓰면 그때 목록에 나타나요. 실비는 수입에 "실비"라고 기록하면 자동으로 빠져요.</li>'
        +   '<li>돌려받는 돈은 연봉으로 어림잡은 값이에요. 정확한 금액은 홈택스 연말정산 미리보기에서 확인하세요.'
        +     (y >= 2027 ? ' '+y+'년 규칙은 세법개정안 기준이라 바뀔 수 있어요.' : '')+'</li>'
        + '</ul>';
@@ -1108,8 +1183,22 @@ function openDedCfg(){
              +   '</div></div>';
       }).join('')
     + '</div>'
+    + '<label class="f" style="margin-top:22px">세대주 — 월세 혜택은 세대주가 받아요</label>'
+    + '<div class="dedown" id="d_head">'
+    +   ['A','B'].map(function(w){ return '<button data-w="'+w+'" aria-pressed="'+(c.dedHead===w)+'">'+esc(nameOf(w))+'</button>'; }).join('')
+    + '</div>'
+    + '<label class="f">시·구에서 받는 월세 지원금 (한 달, 원)</label>'
+    + '<input class="fi" id="d_sub" type="number" inputmode="numeric" value="'+(+(c.rentSub||0) || '')+'" placeholder="없으면 비워두세요">'
+    + '<div class="sub" style="margin-top:6px">지원금만큼은 내가 낸 월세가 아니라서 빼고 계산해요.</div>'
     + '<div class="btns"><button class="btn g" id="d_x">닫기</button><button class="btn p" id="d_ok">저장</button></div>';
   openSheet(h);
+  var head = (c.dedHead==='A' || c.dedHead==='B') ? c.dedHead : '';
+  sheetEl.querySelectorAll('#d_head button').forEach(function(b){
+    b.onclick = function(){
+      head = b.dataset.w;
+      sheetEl.querySelectorAll('#d_head button').forEach(function(x){ x.setAttribute('aria-pressed', x===b); });
+    };
+  });
   var own = {};
   cards.forEach(function(p){ own[p.id] = ownerOf(p.id); });
   sheetEl.querySelectorAll('[data-own]').forEach(function(g){
@@ -1128,6 +1217,8 @@ function openDedCfg(){
       o['sal'+w] = v ? String(Math.round(v * 10000)) : '';
     });
     for(var pid in own) if(own[pid]) o['own_'+pid] = own[pid];
+    if(head) o.dedHead = head;
+    o.rentSub = String(+sheetEl.querySelector('#d_sub').value || 0);
     for(var k in o) S.cfg[k] = o[k];
     call('saveCfg', o); closeSheet(); render(); toast('저장했습니다');
   };
