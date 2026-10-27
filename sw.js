@@ -1,43 +1,38 @@
-/**
- * 우리 가계부 — 서비스워커
- * 화면 파일(index.html, 아이콘 등)만 기기에 담아둡니다. 가계부 데이터(구글 시트)는 절대 담지 않습니다.
- * 화면은 '인터넷 먼저': 연결돼 있으면 늘 최신 화면, 끊겼을 때만 담아둔 화면을 씁니다.
- * → GitHub에 index.html을 고쳐 올리면 다음에 앱을 열 때 바로 반영됩니다.
+/* 우리 가계부 — 화면 파일을 폰에 저장해 두고 바로 엽니다.
+ * · 화면(index.html 등): 저장본으로 먼저 열고, 뒤에서 새 버전을 받아 둡니다
+ *   → GitHub에 올린 수정은 "다음에 앱을 열 때" 반영됩니다.
+ * · 가계부 데이터(Apps Script): 저장하지 않고 항상 서버로 보냅니다.
  */
-var CACHE = 'ledger-v1';
-var ASSETS = ['./', './index.html', './manifest.json',
-              './icons/icon-180.png', './icons/icon-192.png', './icons/icon-512.png'];
+var CACHE = 'gagyebu-v1';
+var SHELL = ['./', './index.html', './manifest.json',
+             './icons/icon-180.png', './icons/icon-192.png', './icons/icon-512.png'];
 
 self.addEventListener('install', function(e){
-  e.waitUntil(caches.open(CACHE).then(function(c){ return c.addAll(ASSETS); }));
+  e.waitUntil(caches.open(CACHE).then(function(c){ return c.addAll(SHELL); }));
   self.skipWaiting();
 });
 
 self.addEventListener('activate', function(e){
-  e.waitUntil(
-    caches.keys().then(function(keys){
-      return Promise.all(keys.filter(function(k){ return k !== CACHE; })
-                             .map(function(k){ return caches.delete(k); }));
-    }).then(function(){ return self.clients.claim(); })
-  );
+  e.waitUntil(caches.keys().then(function(keys){
+    return Promise.all(keys.filter(function(k){ return k !== CACHE; })
+                           .map(function(k){ return caches.delete(k); }));
+  }));
+  self.clients.claim();
 });
 
 self.addEventListener('fetch', function(e){
   var req = e.request;
-  if(req.method !== 'GET') return;                                   // 시트 저장(POST)은 건드리지 않음
-  if(new URL(req.url).origin !== self.location.origin) return;       // 구글·폰트 등 바깥 주소도 건드리지 않음
+  if (req.method !== 'GET') return;                                   // 기록 저장 등은 그대로 서버로
+  var url = new URL(req.url);
+  if (/script\.google(usercontent)?\.com$/.test(url.hostname)) return; // 데이터는 저장하지 않음
 
-  e.respondWith(
-    fetch(req).then(function(res){
-      if(res && res.ok){
-        var copy = res.clone();
-        caches.open(CACHE).then(function(c){ c.put(req, copy); });
-      }
-      return res;
-    }).catch(function(){
-      return caches.match(req).then(function(hit){
-        return hit || caches.match('./index.html');
-      });
-    })
-  );
+  e.respondWith(caches.open(CACHE).then(function(cache){
+    return cache.match(req, { ignoreSearch: true }).then(function(hit){
+      var net = fetch(req).then(function(res){
+        if (res && (res.ok || res.type === 'opaque')) cache.put(req, res.clone());
+        return res;
+      }).catch(function(){ return hit; });
+      return hit || net;
+    });
+  }));
 });
