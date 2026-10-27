@@ -211,6 +211,26 @@ main{flex:1;padding:14px 20px 170px}
 .halftog button{border:0;background:transparent;padding:5px 12px;border-radius:99px;font-size:11.5px;font-weight:600;color:var(--muted);font-family:inherit;cursor:pointer}
 .halftog button[aria-selected="true"]{background:var(--ink);color:#fff}
 
+/* ---------- 연말정산 카드공제 ---------- */
+.dednext{margin-top:10px;border:1px solid var(--line2);border-radius:var(--r2);padding:12px 14px}
+.dednext b{font-size:15px;letter-spacing:-.03em}
+.dedhelp{margin:0;padding:0 0 4px 18px;font-size:12.5px;color:var(--sub);line-height:1.6}
+.dedhelp li{margin-bottom:6px}
+.dedhelp b{color:var(--ink)}
+.dedp{padding:16px 0;border-bottom:1px solid var(--line)}
+.dedp:last-of-type{border-bottom:0}
+.dedp .who{font-size:14.5px;font-weight:700;letter-spacing:-.03em}
+.dedp .bar{margin-top:10px}
+.dedp .bar i{background:var(--accent)}
+.dedtip{margin-top:10px;font-size:12.5px;line-height:1.55;color:var(--sub);background:var(--dim);border-radius:var(--r3);padding:10px 12px;letter-spacing:-.02em}
+.dedtip b{color:var(--ink)}
+.dedtip.go{background:#EDF3FF;color:#2A4A9A}
+.dedtip.go b{color:#1F3F8F}
+.dedbr{font-size:11.5px;color:var(--muted);margin-top:8px;line-height:1.6}
+.dedown{display:flex;gap:6px;flex:none}
+.dedown button{border:1px solid var(--line2);background:var(--surface);border-radius:var(--r3);padding:8px 12px;font-size:13px;font-weight:600;font-family:inherit;color:var(--muted);cursor:pointer}
+.dedown button[aria-pressed="true"]{border-color:var(--ink);color:var(--ink);font-weight:700}
+
 /* ---------- 지출 속도 ---------- */
 .pace{margin-top:16px;background:var(--dim);border-radius:var(--r2);padding:14px 15px}
 .pacebar{height:5px;border-radius:99px;background:#E6E8EB;overflow:hidden}
@@ -375,14 +395,15 @@ function writeCache(m, r){
 function clearCache(){ try { window.localStorage.removeItem(CACHEKEY); } catch(e){} }
 
 /* ---------- 상수 ---------- */
+/* type — 연말정산 공제율 구분: credit 신용카드 / check 체크카드 / none 공제 대상 아님(현금·계좌이체) */
 var PAYS = [
-  {id:'hyundai', s:'현대',  n:'현대카드',         bg:'#15181C', fg:'#fff',    target:300000, bill:12},
-  {id:'lotteA',  s:'구독',  n:'롯데 구독카드',    bg:'#6F6259', fg:'#fff',    target:300000, bill:14},
-  {id:'lotteB',  s:'로카',  n:'롯데 로카카드',    bg:'#8A7A70', fg:'#fff',    target:0,      bill:14},
-  {id:'hana',    s:'하나',  n:'하나카드',         bg:'#00918D', fg:'#fff',    target:0,      bill:10},
-  {id:'kakao',   s:'카뱅',  n:'카카오뱅크 체크',  bg:'#FADA00', fg:'#191919', target:0,      bill:0},
-  {id:'busan',   s:'부산',  n:'부산 체크카드',    bg:'#0F63A8', fg:'#fff',    target:0,      bill:0},
-  {id:'cash',    s:'현금',  n:'현금 / 계좌이체',  bg:'#8795A1', fg:'#fff',    target:0,      bill:0}
+  {id:'hyundai', s:'현대',  n:'현대카드',         bg:'#15181C', fg:'#fff',    target:300000, bill:12, type:'credit'},
+  {id:'lotteA',  s:'구독',  n:'롯데 구독카드',    bg:'#6F6259', fg:'#fff',    target:300000, bill:14, type:'credit'},
+  {id:'lotteB',  s:'로카',  n:'롯데 로카카드',    bg:'#8A7A70', fg:'#fff',    target:0,      bill:14, type:'credit'},
+  {id:'hana',    s:'하나',  n:'하나카드',         bg:'#00918D', fg:'#fff',    target:0,      bill:10, type:'credit'},
+  {id:'kakao',   s:'카뱅',  n:'카카오뱅크 체크',  bg:'#FADA00', fg:'#191919', target:0,      bill:0,  type:'check'},
+  {id:'busan',   s:'부산',  n:'부산 체크카드',    bg:'#0F63A8', fg:'#fff',    target:0,      bill:0,  type:'check'},
+  {id:'cash',    s:'현금',  n:'현금 / 계좌이체',  bg:'#8795A1', fg:'#fff',    target:0,      bill:0,  type:'none'}
 ];
 var BUCKETS = {
   '고정':   ['대출금','월세','공과금','구독비','통신비','보험비','곗돈'],
@@ -729,7 +750,9 @@ function demoSeed(){
   DEMO = {
     cfg:{ nameA:'아내', nameB:'남편', pin:'', baseEmg:'1401719', baseDep:'0', baseInv:'0',
           savEmg:'400000', savDep:'600000', savInv:'1000000',
-          tgt_hyundai:'300000', tgt_lotteA:'300000' },
+          tgt_hyundai:'300000', tgt_lotteA:'300000',
+          salA:'36000000', salB:'48000000',
+          own_hyundai:'A', own_lotteA:'A', own_lotteB:'B', own_hana:'B', own_kakao:'A', own_busan:'B' },
     tx:[
       {id:'d1', date:day(0), kind:'지출', amount:5400,   title:'스타벅스 역삼점', cat:'생활비', pay:'hyundai', who:'A', memo:'', ex:false},
       {id:'d2', date:day(0), kind:'지출', amount:38200,  title:'이마트 성수점',   cat:'생활비', pay:'lotteA',  who:'B', memo:'', ex:false},
@@ -761,6 +784,13 @@ function demo(fn, a){
              prevPay:{ hyundai:797210, lotteA:365650, lotteB:0, hana:483370 },
              pocketPrior:{ emg:{i:0,o:0}, dep:{i:0,o:0}, inv:{i:0,o:0} },
              yearSave:{ emg:1200000, dep:4800000, inv:8000000 },
+             yearDed:{ hyundai:{gen:6200000, transit:0,      culture:240000, excl:380000},
+                       lotteA: {gen:3100000, transit:0,      culture:0,      excl:710000},
+                       lotteB: {gen:5400000, transit:0,      culture:120000, excl:0},
+                       hana:   {gen:2600000, transit:0,      culture:0,      excl:350000},
+                       kakao:  {gen:900000,  transit:420000, culture:0,      excl:2400000},
+                       busan:  {gen:1300000, transit:610000, culture:90000,  excl:0},
+                       cash:   {gen:800000,  transit:0,      culture:0,      excl:9000000} },
              trend:[ {m:'2026-01', card:0, spend:0},
                      {m:'2026-02', card:0, spend:0},
                      {m:'2026-03', card:0, spend:0},
@@ -831,6 +861,279 @@ function calc(){
 }
 
 /* =========================================================
+   연말정산 카드 소득공제 (예상)
+   · 시트(Code.gs)가 보고 있는 해의 사용액을 카드별로 일반·대중교통·문화·제외로 나눠 보내 줍니다 (yearDed)
+   · 여기서는 카드 명의자·총급여를 보고 사람별로 공제액을 계산합니다
+   · 규칙이 바뀌면 DED_RULES 만 고치면 됩니다
+   ========================================================= */
+var DED_START = 2026;   // 이 해부터 정산 탭에 보여줍니다
+var DED_FULL  = 2027;   // 이 해부터는 1월부터 앱에 기록이 다 있어 온전한 계산 (그 전 해는 참고용)
+var DED_RULES = {
+  /* 2026년 사용분 (2027년 초 연말정산) */
+  2026: { credit:.15, check:.30, culture:.30, transit:.40,
+          base:[3000000, 2500000], extra:[3000000, 2000000] },
+  /* 2027년 사용분부터 — 2026년 8월 세법개정안 기준 (국회 통과 후 확정, 달라지면 여기만 고치세요)
+     대중교통 40% 폐지(카드 종류대로 15%/30%), 추가 한도는 전통시장+도서·공연·문화만 */
+  2027: { credit:.15, check:.30, culture:.30, transit:0,
+          base:[3000000, 2500000], extra:[2000000, 1000000] }
+};
+function dedRule(y){
+  var r = null;
+  Object.keys(DED_RULES).map(Number).sort().forEach(function(k){ if(!r || y >= k) r = DED_RULES[k]; });
+  return r;
+}
+function ownerOf(pid){ var v = S.cfg['own_'+pid]; return (v==='A' || v==='B') ? v : ''; }
+
+/** 한 사람 명의 카드의 올해 사용액을 공제 종류별로 모읍니다 */
+function dedBuckets(w, R){
+  var b = { credit:0, check:0, culture:0, transit:0 };
+  var yd = S.yearDed || {};
+  PAYS.forEach(function(p){
+    var s = yd[p.id];
+    if(!s || p.type==='none' || ownerOf(p.id)!==w) return;
+    b[p.type] += s.gen;
+    b.culture += s.culture;
+    if(R.transit) b.transit += s.transit; else b[p.type] += s.transit;   // 대중교통 우대가 없으면 카드 종류대로
+  });
+  return b;
+}
+
+/** 사용액(b)과 총급여(sal)로 공제액을 계산합니다 */
+function dedCalc(b, sal, R){
+  var hi = sal > 70000000 ? 1 : 0;                       // 총급여 7천만원 초과면 한도가 낮아집니다
+  var used = b.credit + b.check + b.culture + b.transit;
+  var th = Math.round(sal * 0.25);
+  /* 기준(총급여 25%)은 공제율이 낮은 것부터 채웁니다 — 신용 → 체크 → 문화 → 대중교통 */
+  var rest = th, after = {};
+  ['credit','check','culture','transit'].forEach(function(k){
+    var x = Math.max(0, b[k]), cut = Math.min(x, rest);
+    rest -= cut; after[k] = x - cut;
+  });
+  var ded = after.credit*R.credit + after.check*R.check + after.culture*R.culture + after.transit*(R.transit||0);
+  var special = after.culture*R.culture + after.transit*(R.transit||0);
+  var base = R.base[hi], extra = R.extra[hi];
+  var fin = Math.round(Math.min(ded, base) + Math.min(Math.max(0, ded - base), extra, special));
+  return { fin:fin, used:used, th:th, over: th > 0 && used >= th, cap:base, full: ded >= base && fin >= base + Math.min(extra, special) };
+}
+
+/** 사용액을 비율만큼 나눕니다 (몰아 쓰기 비교용) */
+function dedScale(b, x){
+  return { credit:b.credit*x, check:b.check*x, culture:b.culture*x, transit:b.transit*x };
+}
+
+/** 공제액 → 실제로 돌려받는 세금 어림값 (지방세 포함 세율을 총급여로 어림잡습니다) */
+function taxRate(sal){ return sal <= 30000000 ? 0.066 : sal <= 110000000 ? 0.165 : 0.264; }
+function refundOf(fin, sal){ return Math.round(fin * taxRate(sal)); }
+
+/** 쉬운 금액 표기 — 92,000 → '약 9만원', 5,000 → '약 5천원' */
+function approx(n){
+  n = Math.round(n || 0);
+  if(n <= 0) return '0원';
+  if(n >= 10000) return '약 '+won(Math.round(n/10000))+'만원';
+  if(n >= 1000) return '약 '+Math.round(n/1000)+'천원';
+  return '약 '+won(n)+'원';
+}
+
+/**
+ * 우리 집 합계 — 지금 돌려받을 돈, 가장 유리하게 썼을 때, 다음 결제에 쓸 카드
+ * 두 사람의 사용액을 합쳐 0%~100%로 나눠보며 '돌려받는 돈' 합계가 가장 큰 비율을 찾습니다.
+ */
+function dedHouse(){
+  var y = +S.month.split('-')[0];
+  var R = dedRule(y);
+  var sal = { A:+(S.cfg.salA||0), B:+(S.cfg.salB||0) };
+  var b = { A:dedBuckets('A', R), B:dedBuckets('B', R) };
+  var cur = { A:dedCalc(b.A, sal.A, R), B:dedCalc(b.B, sal.B, R) };
+  cur.A.ref = sal.A ? refundOf(cur.A.fin, sal.A) : 0;
+  cur.B.ref = sal.B ? refundOf(cur.B.fin, sal.B) : 0;
+  var now = cur.A.ref + cur.B.ref;
+
+  function refundSplit(pool, x){
+    return (sal.A ? refundOf(dedCalc(dedScale(pool, x), sal.A, R).fin, sal.A) : 0)
+         + (sal.B ? refundOf(dedCalc(dedScale(pool, 1-x), sal.B, R).fin, sal.B) : 0);
+  }
+  var pool = { credit:b.A.credit+b.B.credit, check:b.A.check+b.B.check, culture:b.A.culture+b.B.culture, transit:b.A.transit+b.B.transit };
+  var tot = pool.credit + pool.check + pool.culture + pool.transit;
+  var share = tot ? (b.A.credit + b.A.check + b.A.culture + b.A.transit) / tot : 0.5;   // 지금 아내 카드 비율
+  var best = now, bestX = -1, bestGap = 9;
+  for(var i=0;i<=50;i++){
+    var x = i/50, t = refundSplit(pool, x), gap = Math.abs(x - share);
+    /* 같으면 지금 쓰는 방식에 가까운 쪽을 고릅니다 (괜히 바꾸라고 하지 않게) */
+    if(t > best + 1000 || (bestX >= 0 && Math.abs(t - best) <= 1000 && gap < bestGap)){ best = Math.max(best, t); bestX = x; bestGap = gap; }
+  }
+
+  /* 다음 결제 10만원을 어느 카드로 쓰면 돌려받는 돈이 가장 많이 늘까 */
+  var STEP = 100000, pick = null;
+  ['A','B'].forEach(function(w){
+    if(!sal[w]) return;
+    ['check','credit'].forEach(function(tp){
+      var cards = PAYS.filter(function(p){ return p.type===tp && ownerOf(p.id)===w; });
+      if(!cards.length) return;
+      var nb = { credit:b[w].credit, check:b[w].check, culture:b[w].culture, transit:b[w].transit };
+      nb[tp] += STEP;
+      var gain = refundOf(dedCalc(nb, sal[w], R).fin, sal[w]) - cur[w].ref;
+      if(!pick || gain > pick.gain) pick = { w:w, tp:tp, gain:gain, cards:cards };
+    });
+  });
+
+  /* 아직 둘 다 기준 전이면 — 기준까지 덜 남은 사람에게 몰아야 빨리 넘습니다 */
+  var lead = 'A';
+  if(sal.A && sal.B) lead = (cur.A.th - cur.A.used) <= (cur.B.th - cur.B.used) ? 'A' : 'B';
+  else if(sal.B) lead = 'B';
+
+  return { R:R, sal:sal, cur:cur, now:now, best:best, bestX:bestX, pick:pick, lead:lead };
+}
+
+/** 정산 탭 — 연말정산 카드 혜택 (우리 집 합계, 쉬운 말로) */
+function vDed(){
+  var y = +S.month.split('-')[0];
+  if(y < DED_START) return '';
+  var h = '<div class="card"><div class="row"><h3 style="margin:0">연말정산 카드 혜택 <span style="font-weight:400">'+y+'</span></h3>'
+        + '<button class="chip" id="dedCfg">설정</button></div>';
+  if(!S.yearDed){
+    return h + '<div class="sub" style="padding:14px 0 4px">Apps Script의 Code.gs를 새 파일로 바꾸고 <b style="color:var(--ink)">새 버전으로 배포</b>하면 계산돼요.</div></div>';
+  }
+  if(!(+S.cfg.salA) && !(+S.cfg.salB)){
+    return h + '<div class="sub" style="padding:14px 0 4px"><b style="color:var(--ink)">설정</b>에서 두 분 세전 연봉과 카드 명의를 넣으면 계산해 드려요.</div></div>';
+  }
+  if(y < DED_FULL){
+    h += '<div class="banner" style="margin:12px 0 0">'+y+'년은 앱에 기록하기 전 달이 빠져 있어서 실제보다 적게 나와요. 참고용으로 봐주세요.</div>';
+  }
+
+  var d = dedHouse();
+
+  /* ① 돌려받을 돈 */
+  h += '<div class="sub" style="margin-top:14px">카드 덕분에 내년 초에 돌려받을 돈 (두 분 합계)</div>'
+     + '<div class="big num" style="font-size:32px;margin:6px 0 2px">'+approx(d.now)+'</div>';
+
+  /* ② 핵심 한 줄 — 더 받을 수 있는지 */
+  var more = d.best - d.now;
+  if(more >= 5000){
+    var who = (d.bestX <= 0.04 || d.bestX >= 0.96) ? esc(nameOf(d.bestX >= 0.5 ? 'A' : 'B'))+' 카드 한 장으로 몰아' : '두 분 카드를 잘 나눠';
+    h += '<div class="dedtip go" style="margin-top:12px">올해 쓴 돈을 '+who+' 썼다면 <b>'+approx(more)+' 더</b> 받을 수 있었어요.</div>';
+  } else if(d.now > 0){
+    h += '<div class="dedtip go" style="margin-top:12px"><b>지금처럼 쓰면 돼요.</b> 이미 가장 많이 받는 방법이에요.</div>';
+  }
+
+  /* ③ 다음에 쓸 카드 */
+  var p = d.pick, next;
+  if(p && p.gain > 0){
+    next = '<b>'+esc(nameOf(p.w))+' '+p.cards.map(function(c){ return c.s; }).join('·')+' '+(p.tp==='check'?'체크카드':'카드')+'</b>'
+         + '<div class="sub" style="margin-top:3px">10만원 쓸 때마다 '+approx(p.gain)+'씩 더 돌려받아요</div>';
+  } else if(d.cur.A.full || d.cur.B.full){
+    next = '<b>아무 카드나 괜찮아요</b><div class="sub" style="margin-top:3px">받을 수 있는 최대치를 다 채웠어요</div>';
+  } else {
+    var lw = d.lead, lc = d.cur[lw];
+    next = '<b>'+esc(nameOf(lw))+' 카드로 몰아 쓰기</b>'
+         + '<div class="sub" style="margin-top:3px">아직 두 분 다 혜택 시작 전이에요. '+esc(nameOf(lw))+' 카드로 '+man(lc.th - lc.used)+' 더 쓰면 그다음부터 돌려받기 시작해요</div>';
+  }
+  h += '<div class="dednext"><span class="sub">다음 결제는</span><div style="margin-top:4px">'+next+'</div></div>';
+
+  /* ④ 사람별 — 기준까지 얼마나 왔나 */
+  ['A','B'].forEach(function(w){
+    if(!d.sal[w]) return;
+    var c = d.cur[w];
+    var pc = c.th ? Math.min(100, c.used / c.th * 100) : 0;
+    h += '<div class="dedp">'
+       +   '<div class="row"><span class="who">'+esc(nameOf(w))+'</span><b class="num">'+approx(c.ref)+'</b></div>'
+       +   '<div class="bar"><i style="width:'+pc+'%'+(c.over?';background:var(--ok)':'')+'"></i></div>'
+       +   '<div class="sub num" style="margin-top:7px">'
+       +     (c.over
+              ? '<span style="color:var(--ok);font-weight:700">혜택 받는 중</span> · '+man(c.used)+' 중 '+man(c.used - c.th)+'에 혜택'
+              : man(c.used)+' 씀 · <b style="color:var(--ink)">'+man(c.th - c.used)+'</b> 더 쓰면 혜택 시작')
+       +   '</div>'
+       + '</div>';
+  });
+
+  var unowned = 0;
+  PAYS.forEach(function(pp){
+    var s = S.yearDed[pp.id];
+    if(s && pp.type!=='none' && !ownerOf(pp.id)) unowned += s.gen + s.transit + s.culture;
+  });
+  if(unowned > 0){
+    h += '<div class="banner" style="margin:12px 0 0">명의를 정하지 않은 카드에서 쓴 '+man(unowned)+'은 빠져 있어요. 설정에서 카드 명의를 골라 주세요.</div>';
+  }
+
+  /* ⑤ 어떻게 계산돼요? (접어둠) */
+  h += '<button class="fhead" id="dedHelp" aria-expanded="'+(S.dedHelp?'true':'false')+'" style="margin-top:10px;padding:12px 0">'
+     +   '<b style="font-size:13px;color:var(--sub)">이게 어떻게 계산돼요?</b>'
+     +   '<svg class="i chev" viewBox="0 0 24 24"><path d="m6 9 6 6 6-6"/></svg></button>';
+  /* 최대로 받을 수 있는 돈 — 사람마다 */
+  var maxLines = '';
+  ['A','B'].forEach(function(w){
+    if(!d.sal[w]) return;
+    var c = d.cur[w], cap = c.cap;
+    maxLines += '<li><b>'+esc(nameOf(w))+' 최대 '+approx(refundOf(cap, d.sal[w]))+'</b> — 받으려면 1년에 '
+              + '신용카드만 쓰면 '+man(c.th + cap / d.R.credit)+', 체크카드만 쓰면 '+man(c.th + cap / d.R.check)+' 정도 써야 해요.</li>';
+  });
+  if(maxLines) maxLines += '<li>최대치는 사람마다 따로라서, 한 사람이 최대를 채우면 그다음부터는 다른 사람 카드로 쓰는 게 유리해요. 전통시장·도서·공연·영화·헬스장 사용분은 따로 조금 더 받을 수 있어요.</li>';
+  if(S.dedHelp){
+    h += '<ul class="dedhelp">'
+       +   '<li><b>혜택은 연봉의 25%를 넘게 쓴 다음부터</b>예요. 연봉 4천만원이면 1천만원까지 쓴 카드값은 혜택이 없어요. 사람마다 따로 계산돼요.</li>'
+       +   '<li>넘게 쓴 돈부터 신용카드는 '+Math.round(d.R.credit*100)+'%, 체크카드는 '+Math.round(d.R.check*100)+'%만큼 세금 계산에서 빼줘요 (최대 '+man(d.R.base[0])+').</li>'
+       +   '<li>그만큼 세금이 줄어서, 넘긴 돈의 대략 <b>2~5%</b>를 내년 초에 돌려받아요.</li>'
+       +   maxLines
+       +   '<li>나눠 쓰면 두 사람 다 "혜택 없는 25%"를 채워야 해서 그만큼 손해예요. 그래서 <b>한 사람 카드로 몰아 쓰는 게</b> 보통 유리해요.</li>'
+       +   '<li>공과금·통신·보험·대출·월세, 해외 결제, 현금·계좌이체는 계산에서 빠져요.</li>'
+       +   '<li>돌려받는 돈은 연봉으로 어림잡은 값이에요. 정확한 금액은 홈택스 연말정산 미리보기에서 확인하세요.'
+       +     (y >= 2027 ? ' '+y+'년 규칙은 세법개정안 기준이라 바뀔 수 있어요.' : '')+'</li>'
+       + '</ul>';
+  }
+  h += '</div>';
+  return h;
+}
+
+/** 연말정산 설정 — 총급여와 카드 명의 */
+function openDedCfg(){
+  var c = S.cfg;
+  var cards = PAYS.filter(function(p){ return p.type!=='none'; });
+  function salIn(w){
+    var v = +(c['sal'+w]||0);
+    return '<div style="flex:1;min-width:0"><div class="sub" style="margin-bottom:5px">'+esc(nameOf(w))+'</div>'
+         + '<input class="fi" id="d_s'+w+'" type="number" inputmode="numeric" value="'+(v ? Math.round(v/10000) : '')+'" placeholder="예: 4000"></div>';
+  }
+  var h = '<h2>연말정산 설정</h2>'
+    + '<label class="f">세전 연봉 (만원)</label>'
+    + '<div style="display:flex;gap:8px">'+salIn('A')+salIn('B')+'</div>'
+    + '<div class="sub" style="margin-top:6px">식대 같은 비과세 수당은 빼고 적어요. 연봉이 바뀌면 여기만 고치면 돼요.</div>'
+    + '<label class="f" style="margin-top:22px">카드 명의 — 혜택은 쓴 사람이 아니라 명의자에게 들어가요</label>'
+    + '<div class="nb">'
+    + cards.map(function(p){
+        var o = ownerOf(p.id);
+        return '<div class="item bandrow" style="--c:'+p.bg+';padding-top:11px;padding-bottom:11px">'
+             +   '<div class="g"><div class="n" style="font-size:14px">'+p.n+'</div>'
+             +     '<div class="d">'+(p.type==='credit' ? '신용카드' : '체크카드')+'</div></div>'
+             +   '<div class="dedown" data-own="'+p.id+'">'
+             +     ['A','B'].map(function(w){ return '<button data-w="'+w+'" aria-pressed="'+(o===w)+'">'+esc(nameOf(w))+'</button>'; }).join('')
+             +   '</div></div>';
+      }).join('')
+    + '</div>'
+    + '<div class="btns"><button class="btn g" id="d_x">닫기</button><button class="btn p" id="d_ok">저장</button></div>';
+  openSheet(h);
+  var own = {};
+  cards.forEach(function(p){ own[p.id] = ownerOf(p.id); });
+  sheetEl.querySelectorAll('[data-own]').forEach(function(g){
+    g.querySelectorAll('button').forEach(function(b){
+      b.onclick = function(){
+        own[g.dataset.own] = b.dataset.w;
+        g.querySelectorAll('button').forEach(function(x){ x.setAttribute('aria-pressed', x===b); });
+      };
+    });
+  });
+  sheetEl.querySelector('#d_x').onclick = closeSheet;
+  sheetEl.querySelector('#d_ok').onclick = function(){
+    var o = {};
+    ['A','B'].forEach(function(w){
+      var v = +sheetEl.querySelector('#d_s'+w).value || 0;
+      o['sal'+w] = v ? String(Math.round(v * 10000)) : '';
+    });
+    for(var pid in own) if(own[pid]) o['own_'+pid] = own[pid];
+    for(var k in o) S.cfg[k] = o[k];
+    call('saveCfg', o); closeSheet(); render(); toast('저장했습니다');
+  };
+}
+
+/* =========================================================
    렌더
    ========================================================= */
 function render(){
@@ -858,7 +1161,7 @@ function saveLocalCache(){
   if(!GAS || S.loading || S.needKey) return;
   writeCache(S.month, {
     cfg:S.cfg, tx:S.tx.filter(function(t){ return !S.pendingTx[t.id]; }), fix:S.fix, learn:S.learn, paid:S.paid,
-    prevPay:S.prevPay, prevPayBank:S.prevPayBank, pocketPrior:S.pocketPrior, trend:S.trend, yearSave:S.yearSave
+    prevPay:S.prevPay, prevPayBank:S.prevPayBank, pocketPrior:S.pocketPrior, trend:S.trend, yearSave:S.yearSave, yearDed:S.yearDed
   });
 }
 
@@ -1473,6 +1776,9 @@ function vStat(){
     }
     h += '</div>';
   }
+
+  /* 연말정산 카드공제 (DED_START 해부터) */
+  h += vDed();
 
   return h;
 }
@@ -2159,9 +2465,11 @@ function openCfg(){
     +   '<input class="fi" id="c_bi" type="number" value="'+(c.baseInv||0)+'"></div>'
     + '<div class="sub" style="margin-top:5px">앱을 쓰기 시작한 시점의 실제 잔고입니다. 여기에 기록이 더해지고 빠집니다.</div>'
     + '<div class="btns"><button class="btn g" id="c_x">닫기</button><button class="btn p" id="c_ok">저장</button></div>'
-    + (GAS ? '<div class="delrow"><button id="c_key">비밀 키 다시 입력</button></div>' : '');
+    + '<div class="delrow"><button id="c_ded">연말정산 설정 (세전 연봉 · 카드 명의)</button></div>'
+    + (GAS ? '<div class="delrow" style="margin-top:0"><button id="c_key">비밀 키 다시 입력</button></div>' : '');
   openSheet(h);
   sheetEl.querySelector('#c_x').onclick = closeSheet;
+  sheetEl.querySelector('#c_ded').onclick = openDedCfg;
   var ck = sheetEl.querySelector('#c_key');
   if(ck) ck.onclick = function(){
     confirmSheet('비밀 키 다시 입력', '이 기기에 저장된 비밀 키를 지우고 새로 입력합니다. 시트의 기록은 그대로입니다.', '다시 입력', function(){
@@ -2280,6 +2588,8 @@ function bindView(){
   var fd = v.querySelector('#fixDoneToggle'); if(fd) fd.onclick=function(){ S.fixDoneOpen = !S.fixDoneOpen; render(); };
   var af = v.querySelector('#addFix'); if(af) af.onclick=function(){ editFix(null); };
   var ea = v.querySelector('#editAlloc'); if(ea) ea.onclick = editAlloc;
+  var dc = v.querySelector('#dedCfg'); if(dc) dc.onclick = openDedCfg;
+  var dh = v.querySelector('#dedHelp'); if(dh) dh.onclick = function(){ S.dedHelp = !S.dedHelp; render(); };
 }
 document.querySelectorAll('.tabs button').forEach(function(b){
   b.onclick = function(){ S.tab = b.dataset.tab; render(); window.scrollTo(0,0); };
@@ -2340,7 +2650,7 @@ function load(){
 function applyState(r, fromCache){
   S.cfg = r.cfg||{}; S.tx = mergeTx(r.tx, S.month, fromCache); S.fix = r.fix||[]; S.learn = r.learn||{}; S.paid = r.paid||{};
   S.prevPay = r.prevPay||{}; S.prevPayBank = r.prevPayBank||null; S.pocketPrior = r.pocketPrior||null;
-  S.trend = r.trend||[]; S.yearSave = r.yearSave||null;
+  S.trend = r.trend||[]; S.yearSave = r.yearSave||null; S.yearDed = r.yearDed||null;
 }
 
 /* 시작 — 시트에 연결하는데 키가 없으면 먼저 묻습니다 */
@@ -2422,8 +2732,9 @@ function poll(){
     writeCache(want, r);
     /* 서버가 아직 모르는(하지만 이 기기가 방금 만든) 기록은 응답에 다시 얹어 지킵니다 */
     var tx = mergeTx(r.tx, S.month);
-    if(sig(tx)!==sig(S.tx) || JSON.stringify(r.paid||{})!==JSON.stringify(S.paid)){
-      S.tx = tx; S.paid = r.paid||{}; S.fix = r.fix||S.fix; S.cfg = r.cfg||S.cfg; S.prevPay = r.prevPay||{}; S.prevPayBank = r.prevPayBank||null; S.pocketPrior = r.pocketPrior||S.pocketPrior; S.trend = r.trend||S.trend; S.yearSave = r.yearSave||S.yearSave; render();
+    if(sig(tx)!==sig(S.tx) || JSON.stringify(r.paid||{})!==JSON.stringify(S.paid)
+       || JSON.stringify(r.yearDed||null)!==JSON.stringify(S.yearDed||null)){
+      S.tx = tx; S.paid = r.paid||{}; S.fix = r.fix||S.fix; S.cfg = r.cfg||S.cfg; S.prevPay = r.prevPay||{}; S.prevPayBank = r.prevPayBank||null; S.pocketPrior = r.pocketPrior||S.pocketPrior; S.trend = r.trend||S.trend; S.yearSave = r.yearSave||S.yearSave; S.yearDed = r.yearDed||S.yearDed; render();
     }
   }).catch(function(){ polling = false; });
 }
